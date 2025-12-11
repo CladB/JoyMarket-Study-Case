@@ -2,37 +2,62 @@ package database;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.SQLException;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 
 public class Connect {
-	private static final String USERNAME = "root";
-	private static final String PASSWORD = "";
-	private static final String HOST = "localhost:3306";
-	private static final String DATABASE = "delivery_system_db";
-	private static String URL = String.format("jdbc:mysql://%s/%s", HOST, DATABASE);
-	
-	private Connection connection;
-	private static Connect conn;
-	
-	private Connect() {
-		try {
-			connection = DriverManager.getConnection(URL, USERNAME, PASSWORD);
-			System.out.println("Berhasil connect database");
-		} catch (SQLException e) {
-			e.printStackTrace();
-			System.out.println("Gagal connect dengan database");
-		}
-	}
-	
-	public static Connect getInstance() {
-		if(conn == null) {
-			conn = new Connect();
-		} 
-		return conn;
-		
-	}
-	
-	public Connection getConnection() {
-		return this.connection;
-	}
+    private final String USERNAME = "root"; 
+    private final String PASSWORD = ""; // Isi jika ada password
+    private final String DATABASE = "joymarketDB"; 
+    private final String HOST = "localhost:3306"; 
+    private final String CONNECTION = String.format("jdbc:mysql://%s/%s", HOST, DATABASE);
+    
+    // REVISI: Nama variabel diubah jadi conn
+    private Connection conn;
+    private Statement st;
+    private static Connect instance;
+    
+    public static Connect getInstance() {
+        if (instance == null) {
+            instance = new Connect();
+        }
+        return instance;
+    }
+    
+    private Connect() {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            conn = DriverManager.getConnection(CONNECTION, USERNAME, PASSWORD);
+            st = conn.createStatement();
+            System.out.println("Database Connected: " + DATABASE);
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("Connection Failed!");
+        }
+    }
+    
+    // Method untuk mengambil object Connection (Penting untuk Transaction di UserDA)
+    public Connection getConnection() {
+        return conn;
+    }
+    
+    public ResultSet execQuery(String query) {
+        try {
+            st = conn.createStatement();
+            return st.executeQuery(query);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
+    public PreparedStatement prepareStatement(String query) {
+        try {
+            return conn.prepareStatement(query);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 }
