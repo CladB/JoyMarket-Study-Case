@@ -98,6 +98,15 @@ public class ProductWindow {
             UserWindow userWindow = new UserWindow(stage);
             stage.setScene(userWindow.createLoginScene());
         });
+        
+        // === TOMBOL TOP UP ===
+        Button btnTopUp = new Button("Top Up Balance");
+        btnTopUp.setStyle("-fx-background-color: #ccffcc;"); // Hijau muda
+        btnTopUp.setOnAction(e -> {
+            // Pindah ke CustomerWindow
+            CustomerWindow custWindow = new CustomerWindow(stage, userId);
+            stage.setScene(custWindow.createTopUpScene());
+        });
 
         // 5. Layout Setup
         HBox actionBox = new HBox(10);
@@ -106,7 +115,7 @@ public class ProductWindow {
 
         HBox navBox = new HBox(10);
         navBox.setAlignment(Pos.CENTER);
-        navBox.getChildren().addAll(btnViewCart, btnLogout);
+        navBox.getChildren().addAll(btnViewCart, btnTopUp, btnLogout);
 
         VBox root = new VBox(15);
         root.setPadding(new Insets(20));

@@ -11,7 +11,6 @@ public class Main extends Application {
         UserWindow userWindow = new UserWindow(primaryStage);
         
         primaryStage.setTitle("JoyMarket System");
-        // Mulai dari Register Scene sesuai permintaan Activity Diagram sebelumnya
         primaryStage.setScene(userWindow.createRegisterScene());
         primaryStage.show();
     }
