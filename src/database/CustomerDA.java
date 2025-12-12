@@ -10,13 +10,13 @@ public class CustomerDA {
 
 	private Connect connectionManager = Connect.getInstance();
 
-	// === Method UPDATE Saldo (Sequence: 1.1.1.1: saveDA) ===
+	// === Update Saldo ===
 	public boolean saveDA(String idCustomer, double amount) {
 		Connection conn = connectionManager.getConnection();
 		boolean isSuccess = false;
 
 		try {
-			// Query: Tambahkan saldo lama dengan amount baru
+			// === tambah saldo lama dengan yang baru ===
 			String query = "UPDATE customers SET balance = balance + ? WHERE id_customer = ?";
 
 			PreparedStatement ps = conn.prepareStatement(query);
@@ -34,7 +34,7 @@ public class CustomerDA {
 		return isSuccess;
 	}
 
-	// Helper: Ambil saldo saat ini (Untuk ditampilkan di View)
+	// === Show Ambil saldo saat ini ===
 	public double getCurrentBalance(String idCustomer) {
 		double balance = 0.0;
 		try {
@@ -50,20 +50,19 @@ public class CustomerDA {
 	}
 
 	public void updateBalance(String idCustomer, double newBalance) {
-		String sql = "UPDATE customer SET balance = ? WHERE id_customer = ?";
+		String query = "UPDATE customers SET balance = ? WHERE id_customer = ?";
+		
+		Connection conn = connectionManager.getConnection();
+		
+		try (PreparedStatement ps = conn.prepareStatement(query)) {
+	        ps.setDouble(1, newBalance);
+	        ps.setString(2, idCustomer);
+	        ps.executeUpdate();
 
-		try (Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/nama_db", "user", "pass");
-				PreparedStatement pstmt = conn.prepareStatement(sql)) {
+	    } catch (SQLException e) {
+	        System.out.println("Error updateBalance: " + e.getMessage());
+	        throw new RuntimeException(e);
+	    }
 
-			pstmt.setDouble(1, newBalance);
-			pstmt.setString(2, idCustomer);
-
-			pstmt.executeUpdate();
-
-		} catch (SQLException e) {
-			System.out.println("Error updateBalance: " + e.getMessage());
-			// Opsional: Throw exception agar Controller tahu update gagal
-			throw new RuntimeException(e);
-		}
 	}
 }

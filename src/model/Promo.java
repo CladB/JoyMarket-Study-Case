@@ -3,13 +3,24 @@ package model;
 public class Promo {
 	private String idPromo;
 	private String code;
-	private String description;
+	private String headline;
 	private double discountPercentage;
 
 	public Promo() {
 	}
 
-	// Getters & Setters
+	public Promo(String idPromo, String code, String headline, double discountPercentage) {
+		this.idPromo = idPromo;
+		this.code = code;
+		this.headline = headline;
+		this.discountPercentage = discountPercentage;
+	}
+
+	public Promo(String idPromo, double discountPercentage) {
+		this.idPromo = idPromo;
+		this.discountPercentage = discountPercentage;
+	}
+
 	public String getIdPromo() {
 		return idPromo;
 	}
@@ -26,12 +37,12 @@ public class Promo {
 		this.code = code;
 	}
 
-	public String getDescription() {
-		return description;
+	public String getHeadline() {
+		return headline;
 	}
 
-	public void setDescription(String description) {
-		this.description = description;
+	public void setHeadline(String headline) {
+		this.headline = headline;
 	}
 
 	public double getDiscountPercentage() {

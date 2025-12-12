@@ -2,6 +2,7 @@ package controller;
 
 import java.util.List;
 import model.CartItem;
+import model.OrderHeader;
 import model.Product;
 import model.Promo;
 import database.CustomerDA;
@@ -9,6 +10,7 @@ import database.ProductDA;
 import database.PromoDA;
 import database.OrderHeaderDA;
 import database.OrderDetailDA;
+import database.CartItemDA; // <--- JANGAN LUPA IMPORT INI
 
 public class OrderHeaderHandler {
 
@@ -17,81 +19,88 @@ public class OrderHeaderHandler {
 	private PromoDA promoDA = new PromoDA();
 	private OrderHeaderDA orderHeaderDA = new OrderHeaderDA();
 	private OrderDetailDA orderDetailDA = new OrderDetailDA();
+	private CartItemDA cartItemDA = new CartItemDA();
 
-	/**
-	 * Method Utama: Checkout Parameter idCustomer wajib ada untuk mengidentifikasi
-	 * siapa yang beli.
-	 */
 	public String placeOrder(String idCustomer, String promoCode, List<CartItem> cartItems) {
 
-		// 1. Validasi Cart
-		if (cartItems == null || cartItems.isEmpty()) {
+		// === Validasi Cart ===
+		if (cartItems == null || cartItems.isEmpty())
 			return "Error: Keranjang belanja kosong.";
-		}
 
-		// Validasi Tambahan: Pastikan item di keranjang milik customer yang sedang
-		// login
-		// (Mencegah error data silang)
-		if (!cartItems.get(0).getIdCustomer().equals(idCustomer)) {
-			return "Error: Data keranjang tidak sesuai dengan user yang login.";
-		}
-
-		double finalTotalAmount = 0.0;
-
-		// 2. Loop Cart (Validasi Stok & Hitung Total)
+		// === Hitung Total Awal & Cek Stok ===
+		double grossTotal = 0.0;
 		for (CartItem item : cartItems) {
 			Product product = productDA.getProduct(item.getIdProduct());
-
-			if (product == null) {
-				return "Error: Produk " + item.getProductName() + " tidak ditemukan.";
-			}
-
-			if (product.getStock() < item.getQuantity()) {
-				return "Error: Stok " + product.getName() + " tidak mencukupi.";
-			}
-
-			// Hitung total pakai harga database
-			finalTotalAmount += (product.getPrice() * item.getQuantity());
+			if (product == null)
+				return "Error: Produk " + item.getIdProduct() + " tidak ditemukan.";
+			if (product.getStock() < item.getQuantity())
+				return "Error: Stok " + product.getName() + " habis.";
+			grossTotal += (product.getPrice() * item.getQuantity());
 		}
 
-		// 3. Cek Promo
+		// === LOGIC PROMO ===
+		double finalTotalAmount = grossTotal;
+		String validPromoId = null; 
+
 		if (promoCode != null && !promoCode.isEmpty()) {
-			Promo promo = promoDA.getPromo(promoCode);
+			Promo promo = promoDA.getPromoByCode(promoCode);
+
 			if (promo != null) {
-				// Contoh diskon persen
-				double discount = finalTotalAmount * (promo.getDiscountPercentage() / 100);
-				finalTotalAmount -= discount;
+				// === Logic Diskon ===
+				double discount = grossTotal * (promo.getDiscountPercentage() / 100);
+				finalTotalAmount = grossTotal - discount;
+
+				validPromoId = promo.getIdPromo();
 			} else {
-				return "Error: Kode Promo tidak valid.";
+				return "Error: Kode Promo '" + promoCode + "' tidak ditemukan.";
 			}
 		}
 
-		// 4. Cek Saldo Customer (PENTING: Pakai idCustomer)
+		// === Cek Balance Customer ===
 		double currentBalance = customerDA.getCurrentBalance(idCustomer);
-
 		if (currentBalance < finalTotalAmount) {
-			return "Error: Saldo tidak mencukupi.";
+			return "Error: Saldo tidak mencukupi. Total: " + finalTotalAmount;
 		}
 
-		// 5. Simpan Transaksi
+		// === PROSES TRANSAKSI ===
 		try {
-			// A. Kurangi Saldo (Pakai idCustomer)
+			// === Perhitungan Saldo ===
 			customerDA.updateBalance(idCustomer, currentBalance - finalTotalAmount);
 
-			// B. Simpan Header (Pakai idCustomer)
-			String newOrderId = orderHeaderDA.saveOrderHeader(idCustomer, promoCode, finalTotalAmount);
+			// Save order headernya
+			String newOrderId = orderHeaderDA.saveOrderHeader(idCustomer, validPromoId, finalTotalAmount);
 
-			// C. Simpan Detail
+			if (newOrderId == null) {
+				throw new Exception("Gagal membuat Order ID.");
+			}
+
+			// === Simpan Detail -> Kurangi Stok -> Hapus Cart Itemnya ===
 			for (CartItem item : cartItems) {
 				orderDetailDA.saveDetail(newOrderId, item.getIdProduct(), item.getQuantity());
 				productDA.decreaseStock(item.getIdProduct(), item.getQuantity());
+				cartItemDA.deleteCartItem(idCustomer, item.getIdProduct());
 			}
 
-			return "Success: Transaksi Berhasil!";
+			return "Success: Transaksi Berhasil! Total: " + finalTotalAmount;
 
 		} catch (Exception e) {
+			// === ROLLBACK SYSTEM (antisipasi uang hilang ketika error) ===
+			System.out.println("Terjadi Error: " + e.getMessage());
+			System.out.println("Mengembalikan Saldo Customer...");
+
+			// Untuk kembalikan saldo ke jumlah awal
+			customerDA.updateBalance(idCustomer, currentBalance);
+
 			e.printStackTrace();
-			return "Error: Gagal memproses transaksi.";
+			return "Error: Transaksi Gagal (Saldo Anda telah dikembalikan). Detail: " + e.getMessage();
 		}
+	}
+
+	public List<OrderHeader> getOrderHistory(String idCustomer) {
+		return orderHeaderDA.getOrdersByCustomer(idCustomer);
+	}
+
+	public List<OrderHeader> getAllOrdersForAdmin() {
+		return orderHeaderDA.getAllOrders();
 	}
 }

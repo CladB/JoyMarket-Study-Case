@@ -5,6 +5,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import model.User;
@@ -19,11 +20,8 @@ public class UserWindow {
 		this.userHandler = new UserHandler();
 	}
 
-	// ==========================================
-	// SCENE 1: REGISTER PAGE (Sesuai Diagram 1)
-	// ==========================================
+	// === Register Page ===
 	public Scene createRegisterScene() {
-		// 1. Komponen UI
 		Label lblTitle = new Label("JoyMarket Register");
 		lblTitle.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
@@ -36,6 +34,22 @@ public class UserWindow {
 		PasswordField pfPassword = new PasswordField();
 		pfPassword.setPromptText("Password");
 
+		PasswordField pfConfirm = new PasswordField();
+		pfConfirm.setPromptText("Retype Password");
+
+		// === Gender Section ===
+		Label lblGender = new Label("Gender:");
+		ToggleGroup groupGender = new ToggleGroup();
+		RadioButton rbMale = new RadioButton("Male");
+		rbMale.setToggleGroup(groupGender);
+		rbMale.setUserData("Male");
+		RadioButton rbFemale = new RadioButton("Female");
+		rbFemale.setToggleGroup(groupGender);
+		rbFemale.setUserData("Female");
+
+		HBox genderBox = new HBox(10, rbMale, rbFemale);
+		genderBox.setAlignment(Pos.CENTER_LEFT);
+
 		TextField tfPhone = new TextField();
 		tfPhone.setPromptText("Phone Number");
 
@@ -46,46 +60,55 @@ public class UserWindow {
 		Button btnRegister = new Button("Register Account");
 		Button btnGoToLogin = new Button("Already have account? Login");
 
-		// 2. Event Handling
+		// === Event Handling ===
 		btnRegister.setOnAction(e -> {
 			String name = tfName.getText();
 			String email = tfEmail.getText();
 			String password = pfPassword.getText();
+			String confirmPass = pfConfirm.getText();
 			String phone = tfPhone.getText();
 			String address = taAddress.getText();
 
-			// Panggil Controller
-			String result = userHandler.saveDataUser(name, email, password, phone, address);
+			String gender = null;
+			if (groupGender.getSelectedToggle() != null) {
+				gender = groupGender.getSelectedToggle().getUserData().toString();
+			}
+
+			// === Validasi Confirm Password ===
+			if (!password.equals(confirmPass)) {
+				showAlert(Alert.AlertType.ERROR, "Validation Error", "Password Confirmation Error",
+						"Password dan Confirm Password tidak cocok!");
+				return; // === kalau berbeda Stop proses, tidak simpan ke database ===
+			}
+
+			// === Call Handler saveDataUser ===
+			String result = userHandler.saveDataUser(name, email, password, gender, phone, address);
 
 			if (result.equals("Success")) {
 				showAlert(Alert.AlertType.INFORMATION, "Success", "Registration Successful!", "Please login.");
-				stage.setScene(createLoginScene()); // Pindah ke Login
+				stage.setScene(createLoginScene());
 			} else {
 				showAlert(Alert.AlertType.ERROR, "Failed", "Error", result);
 			}
 		});
 
-		// Tombol Navigasi ke Login
 		btnGoToLogin.setOnAction(e -> {
 			stage.setScene(createLoginScene());
 		});
 
-		// 3. Layout (VBox) - PASTIKAN BAGIAN INI ADA
-		VBox root = new VBox(10); // Jarak antar elemen 10px
-		root.setPadding(new Insets(20)); // Jarak dari pinggir window 20px
+		VBox root = new VBox(10);
+		root.setPadding(new Insets(20));
 		root.setAlignment(Pos.CENTER);
 
-		// MENAMBAHKAN SEMUA KOMPONEN KE LAYOUT
 		root.getChildren().addAll(lblTitle, new Label("Name:"), tfName, new Label("Email:"), tfEmail,
-				new Label("Password:"), pfPassword, new Label("Phone:"), tfPhone, new Label("Address:"), taAddress,
-				btnRegister, btnGoToLogin);
+				new Label("Password:"), pfPassword, new Label("Confirm Password:"), pfConfirm, // <--- TAMBAHAN DI SINI
+				lblGender, genderBox, new Label("Phone:"), tfPhone, new Label("Address:"), taAddress, btnRegister,
+				btnGoToLogin);
 
-		return new Scene(root, 400, 600);
+		return new Scene(root, 400, 700);
 	}
 
-	// ==========================================
-	// SCENE 2: LOGIN PAGE (Sesuai Diagram 2)
-	// ==========================================
+	// === Login Page ===
 	public Scene createLoginScene() {
 		Label lblTitle = new Label("JoyMarket Login");
 		lblTitle.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
@@ -99,27 +122,33 @@ public class UserWindow {
 		Button btnLogin = new Button("Login");
 		Button btnBack = new Button("Back to Register");
 
-		// Action Login
 		btnLogin.setOnAction(e -> {
 			String email = tfEmail.getText();
 			String pass = pfPassword.getText();
 
-			// Panggil Handler Login
 			User user = userHandler.login(email, pass);
 
 			if (user != null) {
-				showAlert(Alert.AlertType.INFORMATION, "Success", "Welcome", "Login Berhasil!");
+				showAlert(Alert.AlertType.INFORMATION, "Success", "Welcome",
+						"Login Berhasil sebagai " + user.getRole());
 
-				// Pindah ke ProductWindow dengan membawa ID User
-				ProductWindow productWindow = new ProductWindow(stage, user.getIdUser());
-				stage.setScene(productWindow.createProductScene());
+				// === REDIRECT User by Role ===
+				if (user.getRole().equalsIgnoreCase("Courier")) {
+					// Jika Kurir -> Masuk ke Halaman Tugas Kurir
+					CourierTaskWindow courierWindow = new CourierTaskWindow(stage, user);
+					stage.setScene(courierWindow.createCourierScene());
+
+				} else {
+					// Jika Admin atau Customer -> Masuk ke ProductWindow
+					ProductWindow productWindow = new ProductWindow(stage, user.getIdUser());
+					stage.setScene(productWindow.createProductScene());
+				}
 
 			} else {
 				showAlert(Alert.AlertType.ERROR, "Error", "Login Failed", "Email atau Password salah.");
 			}
 		});
 
-		// Action Back
 		btnBack.setOnAction(e -> {
 			stage.setScene(createRegisterScene());
 		});
@@ -128,14 +157,12 @@ public class UserWindow {
 		root.setPadding(new Insets(20));
 		root.setAlignment(Pos.CENTER);
 
-		// MENAMBAHKAN KOMPONEN LOGIN KE LAYOUT
 		root.getChildren().addAll(lblTitle, new Label("Email:"), tfEmail, new Label("Password:"), pfPassword, btnLogin,
 				btnBack);
 
 		return new Scene(root, 400, 400);
 	}
 
-	// Helper untuk Alert
 	private void showAlert(Alert.AlertType type, String title, String header, String content) {
 		Alert alert = new Alert(type);
 		alert.setTitle(title);

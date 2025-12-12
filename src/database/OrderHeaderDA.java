@@ -1,70 +1,156 @@
 package database;
 
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+import model.OrderHeader;
 
 public class OrderHeaderDA {
+	private Connect connectionManager = Connect.getInstance();
 
-    // Method utama untuk menyimpan Header
-    public String saveOrderHeader(String idCustomer, String promoCode, double totalAmount) {
-        
-        // 1. Generate ID Baru secara manual (Logic Biasa)
-        String newOrderId = generateOrderId(); 
-        
-        // 2. Query Insert
-        String sql = "INSERT INTO order_header (id_order, id_customer, promo_code, total_amount, transaction_date) VALUES (?, ?, ?, ?, NOW())";
+	public String generateOrderId() {
+		return "ORD-" + System.currentTimeMillis() % 100000;
+	}
 
-        try (Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/nama_db", "user", "pass");
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+	// === SAVE ORDER (dipakai waktu Checkout) === 
+	public String saveOrderHeader(String idCustomer, String idPromo, double totalAmount) {
+		String newId = generateOrderId();
 
-            pstmt.setString(1, newOrderId);
-            pstmt.setString(2, idCustomer);
-            
-            // Handle jika promoCode null
-            if (promoCode == null || promoCode.isEmpty()) {
-                pstmt.setNull(3, Types.VARCHAR);
-            } else {
-                pstmt.setString(3, promoCode);
-            }
-            
-            pstmt.setDouble(4, totalAmount);
+		String query = "INSERT INTO order_headers (id_order, id_customer, id_promo, total_amount, status, ordered_at) VALUES (?, ?, ?, ?, 'Pending', NOW())";
 
-            pstmt.executeUpdate();
-            
-            // PENTING: Kembalikan ID baru agar bisa dipakai oleh OrderDetail
-            return newOrderId; 
+		Connection conn = connectionManager.getConnection();
 
-        } catch (SQLException e) {
-            System.out.println("Error saveOrderHeader: " + e.getMessage());
-            return null;
-        }
-    }
+		try (PreparedStatement ps = conn.prepareStatement(query)) {
+			ps.setString(1, newId);
+			ps.setString(2, idCustomer);
 
-    // --- Helper Method: Logic Generasi ID Berurutan ---
-    private String generateOrderId() {
-        String newId = "ORD-001"; // Default jika tabel kosong
-        
-        // Ambil ID terbesar/terakhir yang ada di tabel
-        String sql = "SELECT id_order FROM order_header ORDER BY id_order DESC LIMIT 1";
-        
-        try (Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/nama_db", "user", "pass");
-             PreparedStatement pstmt = conn.prepareStatement(sql);
-             ResultSet rs = pstmt.executeQuery()) {
+			if (idPromo == null) {
+				ps.setNull(3, Types.VARCHAR);
+			} else {
+				ps.setString(3, idPromo);
+			}
 
-            if (rs.next()) {
-                // Misal ID terakhir: "ORD-005"
-                String lastId = rs.getString("id_order");
-                int number = Integer.parseInt(lastId.substring(4));
-                number++;
-                newId = String.format("ORD-%03d", number);
-            }
+			ps.setDouble(4, totalAmount);
 
-        } catch (SQLException e) {
-            System.out.println("Error generateOrderId: " + e.getMessage());
-        } catch (NumberFormatException e) {
-            System.out.println("Error parsing ID: " + e.getMessage());
-            // Fallback jika format ID di database tidak sesuai standar "ORD-XXX"
-        }
-        
-        return newId;
-    }
+			int result = ps.executeUpdate();
+			if (result > 0)
+				return newId;
+
+		} catch (SQLException e) {
+			System.out.println("Error saveOrderHeader: " + e.getMessage());
+			return null;
+		}
+		return null;
+	}
+
+	// === AMbil History Order Customer ===
+	public List<OrderHeader> getOrdersByCustomer(String idCustomer) {
+		List<OrderHeader> historyList = new ArrayList<>();
+		String query = "SELECT * FROM order_headers WHERE id_customer = ? ORDER BY ordered_at DESC";
+
+		Connection conn = connectionManager.getConnection();
+
+		try (PreparedStatement ps = conn.prepareStatement(query)) {
+			ps.setString(1, idCustomer);
+			ResultSet rs = ps.executeQuery();
+
+			while (rs.next()) {
+				OrderHeader order = new OrderHeader();
+				order.setIdOrder(rs.getString("id_order"));
+				order.setIdCustomer(rs.getString("id_customer"));
+				order.setPromoCode(rs.getString("id_promo"));
+				order.setTotalAmount(rs.getDouble("total_amount"));
+				order.setTransactionDate(rs.getString("ordered_at"));
+				order.setStatus(rs.getString("status"));
+				historyList.add(order);
+			}
+
+		} catch (SQLException e) {
+			System.out.println("Error getOrdersByCustomer: " + e.getMessage());
+		}
+		return historyList;
+	}
+
+	// === Ambil Semua Order untuk Admin ===
+	public List<OrderHeader> getAllOrders() {
+		List<OrderHeader> orderList = new ArrayList<>();
+
+		String query = "SELECT o.id_order, o.id_customer, u.full_name, o.id_promo, o.total_amount, o.ordered_at, o.status "
+				+ "FROM order_headers o " + "JOIN users u ON o.id_customer = u.id_user " + "ORDER BY o.ordered_at DESC";
+
+		Connection conn = connectionManager.getConnection();
+
+		try (PreparedStatement ps = conn.prepareStatement(query); 
+				ResultSet rs = ps.executeQuery()) {
+			while (rs.next()) {
+				OrderHeader order = new OrderHeader();
+				order.setIdOrder(rs.getString("id_order"));
+				order.setIdCustomer(rs.getString("id_customer"));
+				order.setCustomerName(rs.getString("full_name")); 
+				order.setPromoCode(rs.getString("id_promo"));
+				order.setTotalAmount(rs.getDouble("total_amount"));
+				order.setTransactionDate(rs.getString("ordered_at"));
+				order.setStatus(rs.getString("status"));
+
+				orderList.add(order);
+			}
+
+		} catch (SQLException e) {
+			System.out.println("Error getAllOrders: " + e.getMessage());
+		}
+		return orderList;
+	}
+
+	// === Update Status (Untuk Kurir/Admin) ===
+	public boolean updateStatus(String idOrder, String newStatus) {
+		String query = "UPDATE order_headers SET status = ? WHERE id_order = ?";
+
+		Connection conn = connectionManager.getConnection();
+
+		try (PreparedStatement ps = conn.prepareStatement(query)) {
+			ps.setString(1, newStatus);
+			ps.setString(2, idOrder);
+
+			int result = ps.executeUpdate();
+			return result > 0;
+
+		} catch (SQLException e) {
+			System.out.println("Error updateStatus: " + e.getMessage());
+			return false;
+		}
+	}
+
+	// === Get Orders (Untuk Kurir) ===
+	public List<OrderHeader> getOrdersByCourier(String idCourier) {
+		List<OrderHeader> taskList = new ArrayList<>();
+
+		String query = "SELECT o.id_order, o.id_customer, u.full_name, o.id_promo, o.total_amount, o.ordered_at, o.status "
+				+ "FROM order_headers o " + "JOIN deliveries d ON o.id_order = d.id_order "
+				+ "JOIN users u ON o.id_customer = u.id_user " + "WHERE d.id_courier = ? "
+				+ "ORDER BY o.ordered_at DESC";
+
+		Connection conn = connectionManager.getConnection();
+
+		try (PreparedStatement ps = conn.prepareStatement(query)) {
+			ps.setString(1, idCourier);
+
+			try (ResultSet rs = ps.executeQuery()) {
+				while (rs.next()) {
+					OrderHeader order = new OrderHeader();
+					order.setIdOrder(rs.getString("id_order"));
+					order.setIdCustomer(rs.getString("id_customer"));
+					order.setCustomerName(rs.getString("full_name"));
+					order.setPromoCode(rs.getString("id_promo"));
+					order.setTotalAmount(rs.getDouble("total_amount"));
+					order.setTransactionDate(rs.getString("ordered_at"));
+					order.setStatus(rs.getString("status"));
+
+					taskList.add(order);
+				}
+			}
+		} catch (SQLException e) {
+			System.out.println("Error getOrdersByCourier: " + e.getMessage());
+		}
+		return taskList;
+	}
 }

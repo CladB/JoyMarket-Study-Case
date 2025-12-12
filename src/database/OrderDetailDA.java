@@ -1,26 +1,25 @@
 package database;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
+import java.sql.*;
 
 public class OrderDetailDA {
+
+	private Connect connectionManager = Connect.getInstance();
+
 	public void saveDetail(String idOrder, String idProduct, int quantity) {
-        // Sesuaikan nama tabel (misal: order_detail) dan kolom
-        String sql = "INSERT INTO order_detail (id_order, id_product, quantity) VALUES (?, ?, ?)";
+		String query = "INSERT INTO order_details (id_order, id_product, qty) VALUES (?, ?, ?)";
 
-        try (Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/nama_db", "user", "pass");
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+		Connection conn = connectionManager.getConnection();
 
-            pstmt.setString(1, idOrder);
-            pstmt.setString(2, idProduct);
-            pstmt.setInt(3, quantity);
+		try (PreparedStatement ps = conn.prepareStatement(query)) {
+			ps.setString(1, idOrder);
+			ps.setString(2, idProduct);
+			ps.setInt(3, quantity);
+			ps.executeUpdate();
 
-            pstmt.executeUpdate();
-
-        } catch (SQLException e) {
-            System.out.println("Error saveDetail: " + e.getMessage());
-        }
-    }
+		} catch (SQLException e) {
+			System.out.println("Error saveDetail: " + e.getMessage());
+			throw new RuntimeException(e);
+		}
+	}
 }
